@@ -1,0 +1,63 @@
+---
+title: "Same-sex households in Texas by race/ethnicity, 2021 - 5-Year Estimates"
+author: "Kaitlan Wong"
+format: html
+editor: visual
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ipumsr)
+library(dplyr)
+library(writexl)
+```
+
+```{r}
+#Read in ACS data from IPUMS
+
+usa_ddi <- read_ipums_ddi("usa_00030.xml")
+data <- read_ipums_micro("usa_00030.xml", data_file = ("usa_00030.csv.gz"), verbose = FALSE)
+
+```
+
+```{r}
+#Filter for same-sex couple households and for one persone from each household
+ss_hh <- data %>%
+  filter(COUPLETYPE %in% c(2, 4)) %>%
+  filter(PERNUM==1) %>%
+  #Mutate vrace/ethnicity and couple type variables
+  mutate(race_eth = case_when(HISPAN %in% c(1:4) & RACE %in% c(1:9) ~ "Hispanic",
+                              HISPAN == 0 & RACE == 1 ~ "White, non-Hispanic",
+                              HISPAN == 0 & RACE == 2 ~ "Black, non-Hispanic",
+                              HISPAN == 0 & RACE == 3 ~ "AIAN, non-Hispanic",
+                              HISPAN == 0 & RACE %in% c(4:6) ~ "Asian or Pacific Islander, non-Hispanic",
+                              HISPAN == 0 & RACE == 7 ~ "Other, non-Hispanic",
+                              HISPAN == 0 & RACE %in% c(8, 9) ~ "Multiracial, non-Hispanic",
+                              TRUE ~ NA_character_))
+
+
+```
+
+```{r}
+## Survey Design
+
+#install.packages("survey")
+library(survey)
+options(survey.lonely.psu = "adjust")
+
+#HOUSEHOLD WEIGHTS DESIGN
+des_hh <- svydesign(id=~CLUSTER, strata=~interaction(STRATA, YEAR), weights=~HHWT, data=ss_hh)  
+
+```
+
+```{r}
+# Calculate table
+ss_table <- svytable(~race_eth, design = des_hh)
+
+# Convert table to data frame
+ss_table_df <- as.data.frame(ss_table)
+
+# Export table
+write_xlsx(ss_table_df, "same_sex_couples_table_5year.xlsx")
+
+```
